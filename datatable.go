@@ -30,10 +30,10 @@ func (i *Index) Clone() *Index {
 
 type DataTable struct {
 	*datatable.DataTable
-	Columns []*DataColumn
-	Indexes map[string]*Index
-	Desc    DBDesc
-	Temp    bool `json:"-"`
+	Columns   []*DataColumn
+	Indexes   map[string]*Index
+	Desc      DBDesc
+	Temporary bool `json:"-"`
 }
 
 func NewDataTable(name string) *DataTable {
@@ -59,7 +59,7 @@ func (d *DataTable) Clone() *DataTable {
 		cols,
 		indexes,
 		d.Desc.Clone(),
-		d.Temp,
+		d.Temporary,
 	}
 }
 

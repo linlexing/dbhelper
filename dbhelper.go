@@ -180,7 +180,9 @@ func (h *DBHelper) GetData(query string, args ...interface{}) (*DataTable, error
 
 	return result, err
 }
-
+func (h *DBHelper) DropTable(tablename string) error {
+	return h.metaHelper.DropTable(tablename)
+}
 func (h *DBHelper) Table(tablename string) (*DataTable, error) {
 	result := NewDataTable(tablename)
 	var err error
