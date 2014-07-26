@@ -3,7 +3,14 @@ package dbhelper
 import (
 	"database/sql"
 	"fmt"
+
 	"reflect"
+	"regexp"
+	"strings"
+)
+
+var (
+	driverMetahelpers map[string]MetaHelper = map[string]MetaHelper{}
 )
 
 type DBHelper struct {
@@ -15,10 +22,19 @@ type DBHelper struct {
 }
 type ParamPlaceholder func(strSql string, num int) string
 
-func NewDBHelper(driverName, dataSourceName string, metaHelper MetaHelper) *DBHelper {
-	fmt.Print(metaHelper)
-	rev := &DBHelper{driverName, dataSourceName, metaHelper, nil, nil}
-	metaHelper.SetDBHelper(rev)
+func RegisterMetaHelper(driverName string, meta MetaHelper) {
+	if _, ok := driverMetahelpers[driverName]; ok {
+		panic(fmt.Errorf("the driver %q meta has exists", driverName))
+	}
+	driverMetahelpers[driverName] = meta
+}
+func NewDBHelper(driverName, dataSourceName string) *DBHelper {
+	meta, ok := driverMetahelpers[driverName]
+	if !ok {
+		panic(fmt.Errorf("the driver %q's metahelper not found", driverName))
+	}
+	rev := &DBHelper{driverName, dataSourceName, meta, nil, nil}
+	meta.SetDBHelper(rev)
 	return rev
 }
 func (h *DBHelper) Open() error {
@@ -79,18 +95,24 @@ func (h *DBHelper) Rollback() error {
 	h.tx = nil
 	return nil
 }
-func (h *DBHelper) Query(query string, args ...interface{}) (*sql.Rows, error) {
+func (h *DBHelper) Query(query string, args ...interface{}) (rows *sql.Rows, err error) {
+	strSql := h.metaHelper.ParamPlaceholder(query, len(args))
 	if h.tx != nil {
-		return h.tx.Query(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		rows, err = h.tx.Query(strSql, args...)
 	} else {
-		return h.db.Query(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		rows, err = h.db.Query(strSql, args...)
 	}
+	if err != nil {
+		err = NewSqlError(strSql, err, args...)
+	}
+	return
 }
 func (h *DBHelper) QueryRow(query string, args ...interface{}) *sql.Row {
+	strSql := h.metaHelper.ParamPlaceholder(query, len(args))
 	if h.tx != nil {
-		return h.tx.QueryRow(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		return h.tx.QueryRow(strSql, args...)
 	} else {
-		return h.db.QueryRow(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		return h.db.QueryRow(strSql, args...)
 	}
 }
 func (h *DBHelper) Exists(Query string, args ...interface{}) (bool, error) {
@@ -109,30 +131,79 @@ func (h *DBHelper) Exists(Query string, args ...interface{}) (bool, error) {
 
 	}
 }
+func decodeQuery(query string) []string {
+	rev := []string{}
+	if query != "" {
+		for _, v := range regexp.MustCompile("[ \t\n]*go([ \t\n]*|$)").Split(query, -1) {
+			str := strings.Trim(v, " \t\n")
+			if str != "" {
+				rev = append(rev, str)
+			}
+		}
+	}
+	return rev
+}
+func (h *DBHelper) GoGetData(query string) (*DataTable, error) {
+	sqls := decodeQuery(query)
+	for i, v := range sqls {
+		if i == len(sqls)-1 {
+			return h.GetData(v)
+		} else {
+			if _, err := h.Exec(v); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return nil, fmt.Errorf("can't run this")
+}
+func (h *DBHelper) GoExec(query string) error {
+	sqls := decodeQuery(query)
+	for _, v := range sqls {
+		if _, err := h.Exec(v); err != nil {
+			return err
+		}
+	}
+	return nil
+
+}
 func (h *DBHelper) QueryOne(query string, args ...interface{}) (interface{}, error) {
 	var row *sql.Row
+	strSql := h.metaHelper.ParamPlaceholder(query, len(args))
 	if h.tx != nil {
-		row = h.tx.QueryRow(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		row = h.tx.QueryRow(strSql, args...)
 	} else {
-		row = h.db.QueryRow(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		row = h.db.QueryRow(strSql, args...)
 	}
 	var rev interface{}
 	err := row.Scan(&rev)
+	if err != nil {
+		err = NewSqlError(strSql, err, args...)
+	}
 	return rev, err
 }
-func (h *DBHelper) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (h *DBHelper) Exec(query string, args ...interface{}) (result sql.Result, err error) {
+	strSql := h.metaHelper.ParamPlaceholder(query, len(args))
 	if h.tx != nil {
-		return h.tx.Exec(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		result, err = h.tx.Exec(strSql, args...)
 	} else {
-		return h.db.Exec(h.metaHelper.ParamPlaceholder(query, len(args)), args...)
+		result, err = h.db.Exec(strSql, args...)
 	}
+	if err != nil {
+		err = NewSqlError(strSql, err, args...)
+	}
+	return
 }
-func (h *DBHelper) Prepare(query string, argsnum int) (*sql.Stmt, error) {
+func (h *DBHelper) Prepare(query string, argsnum int) (stmt *sql.Stmt, err error) {
+	strSql := h.metaHelper.ParamPlaceholder(query, argsnum)
 	if h.tx != nil {
-		return h.tx.Prepare(h.metaHelper.ParamPlaceholder(query, argsnum))
+		stmt, err = h.tx.Prepare(strSql)
 	} else {
-		return h.db.Prepare(h.metaHelper.ParamPlaceholder(query, argsnum))
+		stmt, err = h.db.Prepare(strSql)
 	}
+	if err != nil {
+		err = NewSqlError(strSql, err, argsnum)
+	}
+	return
 }
 func (h *DBHelper) FillTable(table *DataTable, query string, args ...interface{}) error {
 	rows, err := h.Query(query, args)
@@ -143,14 +214,14 @@ func (h *DBHelper) FillTable(table *DataTable, query string, args ...interface{}
 	return err
 }
 func (h *DBHelper) StepTable(table *DataTable, step int64, query string, args ...interface{}) (*StepTable, error) {
-	rows, err := h.Query(query, args)
+	rows, err := h.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	return &StepTable{rows, table, step}, nil
 }
 func (h *DBHelper) GetData(query string, args ...interface{}) (*DataTable, error) {
-	rows, err := h.Query(query, args)
+	rows, err := h.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +243,12 @@ func (h *DBHelper) GetData(query string, args ...interface{}) (*DataTable, error
 			}
 			result.AddColumn(col)
 		}
+		for i, v := range vals {
+			switch tv := v.(type) {
+			case []byte:
+				vals[i] = string(tv)
+			}
+		}
 		_, err := internalRowsFillTable(rows, result, 0, true)
 		if err != nil {
 			return nil, err
@@ -182,6 +259,12 @@ func (h *DBHelper) GetData(query string, args ...interface{}) (*DataTable, error
 }
 func (h *DBHelper) DropTable(tablename string) error {
 	return h.metaHelper.DropTable(tablename)
+}
+func (h *DBHelper) TableExists(tablename string) (bool, error) {
+	return h.metaHelper.TableExists(tablename)
+}
+func (h *DBHelper) StringExpress(value string) string {
+	return h.metaHelper.StringExpress(value)
 }
 func (h *DBHelper) Table(tablename string) (*DataTable, error) {
 	result := NewDataTable(tablename)
@@ -225,7 +308,7 @@ func (h *DBHelper) Table(tablename string) (*DataTable, error) {
 
 	return result, nil
 }
-func (h *DBHelper) SaveChange(table *DataTable) (err error) {
+func (h *DBHelper) SaveChange(table *DataTable) (rcount int64, err error) {
 	if h.tx == nil {
 		if err = h.Begin(); err != nil {
 			return
@@ -244,9 +327,12 @@ func (h *DBHelper) SaveChange(table *DataTable) (err error) {
 				return
 			}
 			err = h.tx.Commit()
+			if err == nil {
+				h.tx = nil
+			}
 		}()
 	}
-	_, err = internalUpdateTableTx(h.tx, table, h.metaHelper.ParamPlaceholder)
+	rcount, err = internalUpdateTableTx(h.tx, table, h.metaHelper.ParamPlaceholder)
 	return
 }
 func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
@@ -281,7 +367,7 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 	}
 	if bKeyChange && oldStruct.HasPrimaryKey() {
 		//删除主键
-		if err := p.metaHelper.DropPrimaryKey(tablename, oldStruct.PKConstraintName); err != nil {
+		if err := p.metaHelper.DropPrimaryKey(tablename); err != nil {
 			return err
 		}
 	}
@@ -385,4 +471,7 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 		}
 	}
 	return nil
+}
+func (d *DBHelper) Merge(dest, source string, colNames []string, pkColumns []string, autoRemove bool, sqlWhere string) error {
+	return d.metaHelper.Merge(dest, source, colNames, pkColumns, autoRemove, sqlWhere)
 }

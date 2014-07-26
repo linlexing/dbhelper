@@ -18,38 +18,37 @@ func ERROR_ColumnNotFound(tabColName string) error {
 	return fmt.Errorf("the column [%s] not found", tabColName)
 }
 func buildInsertSql(table *DataTable) string {
-	cols := []string{}
-	params := []string{}
+	cols := table.ColumnNames()
+	params := make([]string, table.ColumnCount())
 	for i := 0; i < table.ColumnCount(); i++ {
-		cols = append(cols, table.Columns[i].Name)
-		params = append(params, "%s")
+		params[i] = fmt.Sprintf("$%d", i+1)
 	}
-	return fmt.Sprintf("INSERT INTO %v(%v)VALUES(%v)", table.TableName, strings.Join(cols, ","), strings.Join(params, ","))
+	return fmt.Sprintf("INSERT INTO %s(\n\t%s)VALUES(\n\t%s)", table.TableName, strings.Join(cols, ",\n\t"), strings.Join(params, ",\n\t"))
 }
 func buildUpdateSql(table *DataTable) string {
-	sets := []string{}
-	wheres := []string{}
+	sets := make([]string, table.ColumnCount())
+	wheres := make([]string, table.ColumnCount())
 	for i := 0; i < table.ColumnCount(); i++ {
-		sets = append(sets, fmt.Sprintf("%v = %%s", table.Columns[i].Name))
-		wheres = append(wheres, fmt.Sprintf("%v = %%s", table.Columns[i].Name))
+		sets[i] = fmt.Sprintf("%s = $%d", table.Columns[i].Name, i+1)
+		wheres = append(wheres, fmt.Sprintf("%s = $%d", table.Columns[i].Name, table.ColumnCount()+i+1))
 	}
-	return fmt.Sprintf("UPDATE %v SET %v WHERE %v", table.TableName, strings.Join(sets, ","), strings.Join(wheres, " AND "))
+	return fmt.Sprintf("UPDATE %s SET\n\t%s\nWHERE\n\t%s", table.TableName, strings.Join(sets, ",\n\t"), strings.Join(wheres, " AND\n\t"))
 
 }
 func buildDeleteSql(table *DataTable) string {
-	params := []string{}
-	for _, c := range table.PK {
-		params = append(params, fmt.Sprintf("%v = %%s", c))
+	params := make([]string, len(table.PK))
+	for i, c := range table.PK {
+		params[i] = fmt.Sprintf("%s = $%d", c, i+1)
 	}
-	return fmt.Sprintf("DELETE FROM %v WHERE %v", table.TableName, strings.Join(params, " AND "))
+	return fmt.Sprintf("DELETE FROM %s WHERE\n\t%s", table.TableName, strings.Join(params, " AND\n\t"))
 
 }
 func buildSelectSql(table *DataTable) string {
-	params := []string{}
-	for _, c := range table.PK {
-		params = append(params, fmt.Sprintf("%v = %%s", c))
+	params := make([]string, len(table.PK))
+	for i, c := range table.PK {
+		params[i] = fmt.Sprintf("%s = $%d", c, i+1)
 	}
-	return fmt.Sprintf("SELECT %s FROM %s WHERE %v", strings.Join(table.ColumnNames(), ","), table.TableName, strings.Join(params, " AND "))
+	return fmt.Sprintf("SELECT\n\t%s\nFROM\n\t%s\nWHERE\n\t%s", strings.Join(table.ColumnNames(), ",\n\t"), table.TableName, strings.Join(params, " AND\n\t"))
 
 }
 func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp ParamPlaceholder) (rcount int64, result_err error) {
@@ -112,7 +111,6 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp ParamPlaceholder) (r
 	}
 	return
 }
-
 func internalRowsFillTable(rows *sql.Rows, table *DataTable, maxRow int64, firstRead bool) (eof bool, err error) {
 	//先建立实际字段与扫描字段的顺序对应关系
 	var cols []string

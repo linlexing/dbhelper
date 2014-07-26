@@ -2,8 +2,10 @@
 package dbhelper
 
 import (
+	"fmt"
 	"github.com/linlexing/datatable.go"
 	"reflect"
+	"strings"
 )
 
 type Index struct {
@@ -67,7 +69,7 @@ func (d *DataTable) Clone() *DataTable {
 func (d *DataTable) NewPtrValues() []interface{} {
 	result := make([]interface{}, d.ColumnCount())
 	for i, c := range d.Columns {
-		result[i] = c.PtrZeroValue()
+		result[i] = c.PtrValue()
 	}
 	return result
 }
@@ -81,4 +83,21 @@ func (d *DataTable) AddColumn(col *DataColumn) *DataColumn {
 	d.DataTable.AddColumn(col.DataColumn)
 	d.Columns = append(d.Columns, col)
 	return col
+}
+func (t *DataTable) SelectAllByWhere(strWhere string) string {
+	if strWhere != "" {
+		strWhere = "\nwhere\n\t" + strWhere
+	}
+	cols := make([]string, t.ColumnCount())
+	for i, v := range t.ColumnNames() {
+		cols[i] = "\t" + v
+	}
+	return "SELECT\n" + strings.Join(cols, ",\n") + "\nFROM\n\t" + t.TableName + strWhere
+}
+func (t *DataTable) SelectAllByID() string {
+	where := make([]string, len(t.PK))
+	for i, v := range t.PK {
+		where[i] = fmt.Sprintf("%s=$%d", v, i+1)
+	}
+	return t.SelectAllByWhere(strings.Join(where, " AND\n\t"))
 }

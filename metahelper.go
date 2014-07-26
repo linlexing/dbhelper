@@ -37,11 +37,12 @@ func (r *RootMeta) DropColumn(table, column string) error {
 
 type MetaHelper interface {
 	SetDBHelper(helper *DBHelper)
+	StringExpress(value string) string
 	ParamPlaceholder(strSql string, num int) string
 
 	TableExists(tablename string) (bool, error)
 	DropTable(tablename string) error
-	DropPrimaryKey(tablename, pkConstraintName string) error
+	DropPrimaryKey(tablename string) error
 	DropColumn(table, column string) error
 	DropIndex(tablename, indexname string) error
 
@@ -58,4 +59,5 @@ type MetaHelper interface {
 	GetIndexes(tablename string) ([]*TableIndex, error)
 	GetColumns(tablename string) ([]*TableColumn, error)
 	GetPrimaryKeys(tablename string) ([]string, error)
+	Merge(dest, source string, colNames []string, pkColumns []string, autoRemove bool, sqlWhere string) error
 }

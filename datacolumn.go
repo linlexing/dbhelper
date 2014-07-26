@@ -1,7 +1,9 @@
 package dbhelper
 
 import (
+	"fmt"
 	"github.com/linlexing/datatable.go"
+	"reflect"
 )
 
 type DataColumn struct {
@@ -18,6 +20,20 @@ func (d *DataColumn) OriginName() string {
 	}
 }
 
+//alloc empty value,return pointer the value
+func (d *DataColumn) PtrValue() interface{} {
+	defer func() {
+		if f := recover(); f != nil {
+			panic(fmt.Sprintf("%s,type:%s", f, d.StoreType()))
+		}
+	}()
+	if d.NotNull {
+		return reflect.New(d.ReflectType()).Interface()
+	} else {
+		var v interface{}
+		return &v
+	}
+}
 func (d *DataColumn) Clone() *DataColumn {
 	return &DataColumn{d.DataColumn.Clone(), d.Desc.Clone()}
 }

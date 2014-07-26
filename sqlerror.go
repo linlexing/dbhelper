@@ -2,6 +2,7 @@ package dbhelper
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 )
 
 type SqlError struct {
@@ -11,7 +12,7 @@ type SqlError struct {
 }
 
 func (s *SqlError) Error() string {
-	return fmt.Sprintf("%v:\n%v\nparams:%v\n", s.err, s.sql, s.params)
+	return fmt.Sprintf("%v:\n%v\nparams:%v\n", s.err, s.sql, spew.Sdump(s.params))
 }
 func NewSqlError(strSql string, err error, params ...interface{}) *SqlError {
 	return &SqlError{
