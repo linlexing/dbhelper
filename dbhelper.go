@@ -88,9 +88,11 @@ func (h *DBHelper) Close() error {
 		return err
 	}
 	h.db = nil
+	h.tx = nil
 	return nil
 }
 func (h *DBHelper) Begin() error {
+
 	if h.tx != nil {
 		return fmt.Errorf("already begin trans")
 	}
@@ -113,9 +115,11 @@ func (h *DBHelper) Commit() error {
 		return err
 	}
 	h.tx = nil
+
 	return nil
 }
 func (h *DBHelper) Rollback() error {
+
 	if h.tx == nil {
 		return fmt.Errorf("the trans not begin")
 	}

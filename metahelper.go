@@ -27,11 +27,11 @@ func (r *RootMeta) SetDBHelper(h *DBHelper) {
 	return
 }
 func (r *RootMeta) DropTable(tablename string) error {
-	_, err := r.DBHelper.Exec(fmt.Sprintf("DROP TABLE %s", tablename), nil)
+	_, err := r.DBHelper.Exec(fmt.Sprintf("DROP TABLE %s", tablename))
 	return err
 }
 func (r *RootMeta) DropColumn(table, column string) error {
-	_, err := r.DBHelper.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column), nil)
+	_, err := r.DBHelper.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column))
 	return err
 }
 
