@@ -27,18 +27,20 @@ func (r *RootMeta) SetDBHelper(h *DBHelper) {
 	return
 }
 func (r *RootMeta) DropTable(tablename string) error {
-	_, err := r.DBHelper.Exec(fmt.Sprintf("DROP TABLE %s", tablename))
+	_, err := r.DBHelper.Exec(fmt.Sprintf("DROP TABLE %s", tablename), nil)
 	return err
 }
 func (r *RootMeta) DropColumn(table, column string) error {
-	_, err := r.DBHelper.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column))
+	_, err := r.DBHelper.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", table, column), nil)
 	return err
 }
 
 type MetaHelper interface {
 	SetDBHelper(helper *DBHelper)
+
 	StringExpress(value string) string
-	ParamPlaceholder(strSql string, num int) string
+	ParamPlaceholder(num int) string
+	RegLike(value, strRegexp string) string
 
 	TableExists(tablename string) (bool, error)
 	DropTable(tablename string) error

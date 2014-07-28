@@ -21,7 +21,7 @@ func buildInsertSql(table *DataTable) string {
 	cols := table.ColumnNames()
 	params := make([]string, table.ColumnCount())
 	for i := 0; i < table.ColumnCount(); i++ {
-		params[i] = fmt.Sprintf("$%d", i+1)
+		params[i] = "{{ph}}"
 	}
 	return fmt.Sprintf("INSERT INTO %s(\n\t%s)VALUES(\n\t%s)", table.TableName, strings.Join(cols, ",\n\t"), strings.Join(params, ",\n\t"))
 }
@@ -29,8 +29,8 @@ func buildUpdateSql(table *DataTable) string {
 	sets := make([]string, table.ColumnCount())
 	wheres := make([]string, table.ColumnCount())
 	for i := 0; i < table.ColumnCount(); i++ {
-		sets[i] = fmt.Sprintf("%s = $%d", table.Columns[i].Name, i+1)
-		wheres = append(wheres, fmt.Sprintf("%s = $%d", table.Columns[i].Name, table.ColumnCount()+i+1))
+		sets[i] = fmt.Sprintf("%s = {{ph}}", table.Columns[i].Name)
+		wheres = append(wheres, fmt.Sprintf("%s = {{ph}}", table.Columns[i].Name, table.ColumnCount()+i+1))
 	}
 	return fmt.Sprintf("UPDATE %s SET\n\t%s\nWHERE\n\t%s", table.TableName, strings.Join(sets, ",\n\t"), strings.Join(wheres, " AND\n\t"))
 
@@ -38,7 +38,7 @@ func buildUpdateSql(table *DataTable) string {
 func buildDeleteSql(table *DataTable) string {
 	params := make([]string, len(table.PK))
 	for i, c := range table.PK {
-		params[i] = fmt.Sprintf("%s = $%d", c, i+1)
+		params[i] = fmt.Sprintf("%s = {{ph}}", c)
 	}
 	return fmt.Sprintf("DELETE FROM %s WHERE\n\t%s", table.TableName, strings.Join(params, " AND\n\t"))
 
@@ -46,12 +46,12 @@ func buildDeleteSql(table *DataTable) string {
 func buildSelectSql(table *DataTable) string {
 	params := make([]string, len(table.PK))
 	for i, c := range table.PK {
-		params[i] = fmt.Sprintf("%s = $%d", c, i+1)
+		params[i] = fmt.Sprintf("%s = {{ph}}", c)
 	}
 	return fmt.Sprintf("SELECT\n\t%s\nFROM\n\t%s\nWHERE\n\t%s", strings.Join(table.ColumnNames(), ",\n\t"), table.TableName, strings.Join(params, " AND\n\t"))
 
 }
-func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp ParamPlaceholder) (rcount int64, result_err error) {
+func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp func(string, map[string]interface{}) string) (rcount int64, result_err error) {
 	changes := table.GetChange()
 	if changes.RowCount == 0 {
 		return
@@ -61,7 +61,7 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp ParamPlaceholder) (r
 	var iCount int64
 	if len(changes.DeleteRows) > 0 {
 		strSql := buildDeleteSql(table)
-		if stmt, result_err = tx.Prepare(pp(strSql, table.ColumnCount())); result_err != nil {
+		if stmt, result_err = tx.Prepare(pp(strSql, nil)); result_err != nil {
 			result_err = NewSqlError(strSql, result_err)
 			return
 		}
@@ -79,7 +79,7 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp ParamPlaceholder) (r
 	}
 	if len(changes.UpdateRows) > 0 {
 		strSql := buildUpdateSql(table)
-		if stmt, result_err = tx.Prepare(pp(strSql, 2*table.ColumnCount())); result_err != nil {
+		if stmt, result_err = tx.Prepare(pp(strSql, nil)); result_err != nil {
 			result_err = NewSqlError(strSql, result_err)
 			return
 		}
@@ -97,7 +97,7 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp ParamPlaceholder) (r
 
 	if len(changes.InsertRows) > 0 {
 		strSql := buildInsertSql(table)
-		if stmt, result_err = tx.Prepare(pp(strSql, table.ColumnCount())); result_err != nil {
+		if stmt, result_err = tx.Prepare(pp(strSql, nil)); result_err != nil {
 			result_err = NewSqlError(strSql, result_err)
 			return
 		}
