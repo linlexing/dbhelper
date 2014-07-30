@@ -92,12 +92,12 @@ func (t *DataTable) SelectAllByWhere(strWhere string) string {
 	for i, v := range t.ColumnNames() {
 		cols[i] = "\t" + v
 	}
-	return "SELECT\n" + strings.Join(cols, ",\n") + "\nFROM\n\t" + t.TableName + strWhere
+	return fmt.Sprintf("SELECT\n%s\nFROM\n\t%s dest%s", strings.Join(cols, ",\n"), t.TableName, strWhere)
 }
 func (t *DataTable) SelectAllByID() string {
 	where := make([]string, len(t.PK))
 	for i, v := range t.PK {
-		where[i] = fmt.Sprintf("%s=$%d", v, i+1)
+		where[i] = fmt.Sprintf("%s={{ph}}", v)
 	}
 	return t.SelectAllByWhere(strings.Join(where, " AND\n\t"))
 }

@@ -41,6 +41,7 @@ type MetaHelper interface {
 	StringExpress(value string) string
 	ParamPlaceholder(num int) string
 	RegLike(value, strRegexp string) string
+	StringCat(values ...string) string
 
 	TableExists(tablename string) (bool, error)
 	DropTable(tablename string) error

@@ -51,10 +51,17 @@ func (h *DBHelper) ConvertSql(sql string, args map[string]interface{}) string {
 		"reglike": func(value, strRegexp string) string {
 			return h.metaHelper.RegLike(value, strRegexp)
 		},
+		"strcat": func(values ...string) string {
+			return h.metaHelper.StringCat(values...)
+		},
 	})
 	t, err := t.Parse(sql)
 	if err != nil {
-		panic(err)
+		strErr := ""
+		for i, v := range strings.Split(sql, "\n") {
+			strErr += fmt.Sprintf("%d\t%s\n", i+1, v)
+		}
+		panic(fmt.Errorf("%s\n%s", err, strErr))
 	}
 	param := map[string]interface{}{}
 	for i, v := range args {
@@ -215,7 +222,7 @@ func (h *DBHelper) GoExec(query string) error {
 func (h *DBHelper) GoExecT(query string, templateParam map[string]interface{}) error {
 	sqls := decodeQuery(h.ConvertSql(query, templateParam))
 	for _, v := range sqls {
-		if _, err := h.Exec(v, nil); err != nil {
+		if _, err := h.Exec(v); err != nil {
 			return err
 		}
 	}
