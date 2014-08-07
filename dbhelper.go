@@ -191,7 +191,7 @@ func (h *DBHelper) ExistsT(Query string, templateParam map[string]interface{}, a
 func decodeQuery(query string) []string {
 	rev := []string{}
 	if query != "" {
-		for _, v := range regexp.MustCompile("[ \t\n]*go([ \t\n]*|$)").Split(query, -1) {
+		for _, v := range regexp.MustCompile("[ \t\r\n]go([ \t\r\n]|$)").Split(query, -1) {
 			str := strings.Trim(v, " \t\n")
 			if str != "" {
 				rev = append(rev, str)
@@ -243,6 +243,9 @@ func (h *DBHelper) QueryOneT(query string, templateParam map[string]interface{},
 	}
 	var rev interface{}
 	err := row.Scan(&rev)
+	if sql.ErrNoRows == err {
+		return nil, nil
+	}
 	if err != nil {
 		err = NewSqlError(strSql, err, args...)
 	}
@@ -558,6 +561,6 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 	}
 	return nil
 }
-func (d *DBHelper) Merge(dest, source string, colNames []string, pkColumns []string, autoRemove bool, sqlWhere string) error {
-	return d.metaHelper.Merge(dest, source, colNames, pkColumns, autoRemove, sqlWhere)
+func (d *DBHelper) Merge(dest, source string, colNames []string, pkColumns []string, autoUpdate, autoRemove bool, sqlWhere string) error {
+	return d.metaHelper.Merge(dest, source, colNames, pkColumns, autoUpdate, autoRemove, sqlWhere)
 }

@@ -62,5 +62,5 @@ type MetaHelper interface {
 	GetIndexes(tablename string) ([]*TableIndex, error)
 	GetColumns(tablename string) ([]*TableColumn, error)
 	GetPrimaryKeys(tablename string) ([]string, error)
-	Merge(dest, source string, colNames []string, pkColumns []string, autoRemove bool, sqlWhere string) error
+	Merge(dest, source string, colNames []string, pkColumns []string, autoUpdate, autoRemove bool, sqlWhere string) error
 }
