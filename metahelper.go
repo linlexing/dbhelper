@@ -3,6 +3,7 @@ package dbhelper
 import (
 	"fmt"
 	"github.com/linlexing/datatable.go"
+	"strings"
 )
 
 type TableColumn struct {
@@ -35,8 +36,111 @@ func (r *RootMeta) DropColumn(table, column string) error {
 	return err
 }
 
+type orderField struct {
+	Field    string
+	SortType string
+	Value    interface{}
+}
+
+func buildWhere(orderby []*orderField, lastValues []interface{}) (string, []interface{}) {
+	if len(orderby) == 0 {
+		panic(fmt.Errorf("orderby can't is empty"))
+	}
+	var opt string
+	if orderby[0].SortType == "DESC" {
+		opt = "<"
+	} else {
+		opt = ">"
+	}
+	result := fmt.Sprintf("\t%s %s {{ph}}", orderby[0].Field, opt)
+	lastValues = append(lastValues, orderby[0].Value)
+	if len(orderby) > 1 {
+		var str string
+		lastValues = append(lastValues, orderby[0].Value)
+		str, lastValues = buildWhere(orderby[1:], lastValues)
+		result = fmt.Sprintf("(%s or (%s = {{ph}} and %s))", result, orderby[0].Field, str)
+	}
+	return result, lastValues
+}
+func (r *RootMeta) BuildSelectLimitSql(srcSql string, pkFields []string, startKeyValue map[string]interface{}, selectCols []string, where string, orderby []string, limit int) (string, []interface{}) {
+	orderbyArr, lstvalWhere, lstval := func(pk, orderby []string, startKeyValue map[string]interface{}) ([]string, string, []interface{}) {
+		usedPk := map[string]bool{}
+		result := make([]string, len(orderby))
+
+		for i, v := range orderby {
+			vs := strings.Split(v, " ")
+			colName := vs[0]
+			for _, sv := range pk {
+				if sv == colName {
+					usedPk[sv] = true
+					break
+				}
+			}
+			result[i] = v
+		}
+		//add pk column if not include
+		for _, v := range pk {
+			if _, ok := usedPk[v]; !ok {
+				result = append(result, v)
+			}
+		}
+		var where string
+		var params []interface{}
+		if len(startKeyValue) > 0 {
+			orderFields := make([]*orderField, len(result))
+			params = []interface{}{}
+			for i, v := range result {
+				vs := strings.Split(v, " ")
+				var stype string
+				if len(vs) == 2 && vs[1] == "DESC" {
+					stype = "DESC"
+				} else {
+					stype = "ASC"
+				}
+				orderFields[i] = &orderField{vs[0], stype, startKeyValue[vs[0]]}
+			}
+			where, params = buildWhere(orderFields, params)
+		}
+		return result, where, params
+	}(pkFields, orderby, startKeyValue)
+
+	selectStr := ""
+	selectArr := make([]string, len(selectCols))
+	whereStr := ""
+	orderbyStr := ""
+	for i, v := range selectCols {
+		selectArr[i] = "\t" + v
+	}
+	if len(selectArr) > 0 {
+		selectStr = strings.Join(selectArr, ",\n")
+	} else {
+		selectStr = "\t*"
+	}
+	if len(orderby) > 0 {
+		orderbyStr = "\norder by\n" + strings.Join(orderbyArr, ",\n")
+	}
+	if where != "" {
+		whereStr = "\nwhere\n\t(" + where + ")"
+	}
+	if len(lstvalWhere) > 0 {
+		if whereStr == "" {
+			whereStr = "\nwhere\n" + lstvalWhere
+		} else {
+			whereStr = where + " and\n" + lstvalWhere
+		}
+	}
+	return fmt.Sprintf(
+		"select\n%s\nfrom\n\t(%s) sellmt %s%s\nlimit %d",
+		selectStr,
+		srcSql,
+		whereStr,
+		orderbyStr,
+		limit), lstval
+}
+
 type MetaHelper interface {
 	SetDBHelper(helper *DBHelper)
+	BuildSelectLimitSql(srcSql string, pkFields []string, startKeyValue map[string]interface{}, selectCols []string, where string, orderby []string, limit int) (string, []interface{})
 
 	StringExpress(value string) string
 	ParamPlaceholder(num int) string

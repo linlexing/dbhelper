@@ -311,6 +311,14 @@ func (h *DBHelper) StepTableT(table *DataTable, step int64, query string, templa
 func (h *DBHelper) GetData(query string, args ...interface{}) (*DataTable, error) {
 	return h.GetDataT(query, nil, args...)
 }
+func (h *DBHelper) SelectLimit(srcSql string, pkFields []string, startKeyValue map[string]interface{}, selectCols []string, where string, orderby []string, limit int) (*DataTable, error) {
+	sql, vals := h.metaHelper.BuildSelectLimitSql(srcSql, pkFields, startKeyValue, selectCols, where, orderby, limit)
+	return h.GetData(sql, vals...)
+}
+func (h *DBHelper) SelectLimitT(srcSql string, templateParam map[string]interface{}, pkFields []string, startKeyValue map[string]interface{}, selectCols []string, where string, orderby []string, limit int) (*DataTable, error) {
+	sql, vals := h.metaHelper.BuildSelectLimitSql(srcSql, pkFields, startKeyValue, selectCols, where, orderby, limit)
+	return h.GetDataT(sql, templateParam, vals...)
+}
 func (h *DBHelper) GetDataT(query string, templateParam map[string]interface{}, args ...interface{}) (*DataTable, error) {
 	rows, err := h.QueryT(query, templateParam, args...)
 	if err != nil {
