@@ -7,7 +7,7 @@ import (
 
 type DBDesc map[string]interface{}
 
-func copyMap(src, dest map[string]interface{}) map[string]interface{} {
+func copyMap(src map[string]interface{}) map[string]interface{} {
 	buf, err := json.Marshal(src)
 	if err != nil {
 		panic(err)
@@ -23,8 +23,7 @@ func (p DBDesc) IsEmpty() bool {
 	return len(p) == 0
 }
 func (p DBDesc) Clone() DBDesc {
-	rev := DBDesc{}
-	return copyMap(p, rev)
+	return copyMap(p)
 }
 func (p DBDesc) Equal(p1 DBDesc) bool {
 	if len(p) != len(p1) {

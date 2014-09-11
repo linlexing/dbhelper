@@ -30,7 +30,7 @@ func buildUpdateSql(table *DataTable) string {
 	wheres := make([]string, table.ColumnCount())
 	for i := 0; i < table.ColumnCount(); i++ {
 		sets[i] = fmt.Sprintf("%s = {{ph}}", table.Columns[i].Name)
-		wheres = append(wheres, fmt.Sprintf("%s = {{ph}}", table.Columns[i].Name, table.ColumnCount()+i+1))
+		wheres[i] = fmt.Sprintf("%s = {{ph}}", table.Columns[i].Name)
 	}
 	return fmt.Sprintf("UPDATE %s SET\n\t%s\nWHERE\n\t%s", table.TableName, strings.Join(sets, ",\n\t"), strings.Join(wheres, " AND\n\t"))
 
@@ -62,12 +62,20 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp func(string, map[str
 	if len(changes.DeleteRows) > 0 {
 		strSql := buildDeleteSql(table)
 		if stmt, result_err = tx.Prepare(pp(strSql, nil)); result_err != nil {
-			result_err = NewSqlError(strSql, result_err)
+			result_err = NewSqlError("[prepare]\n"+strSql, result_err)
 			return
 		}
 		for _, r := range changes.DeleteRows {
-			if result, result_err = stmt.Exec(r.OriginData...); result_err != nil {
-				result_err = NewSqlError(strSql, result_err, r.OriginData...)
+			pkValues := make([]interface{}, len(table.PK))
+			for i, pkColumn := range table.PK {
+				if r.OriginData != nil {
+					pkValues[i] = r.OriginData[table.ColumnIndex(pkColumn)]
+				} else {
+					pkValues[i] = r.Data[table.ColumnIndex(pkColumn)]
+				}
+			}
+			if result, result_err = stmt.Exec(pkValues...); result_err != nil {
+				result_err = NewSqlError(strSql, result_err, pkValues...)
 				return
 			}
 			if iCount, result_err = result.RowsAffected(); result_err != nil {
@@ -80,7 +88,7 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp func(string, map[str
 	if len(changes.UpdateRows) > 0 {
 		strSql := buildUpdateSql(table)
 		if stmt, result_err = tx.Prepare(pp(strSql, nil)); result_err != nil {
-			result_err = NewSqlError(strSql, result_err)
+			result_err = NewSqlError("[prepare]\n"+strSql, result_err)
 			return
 		}
 		for _, r := range changes.UpdateRows {
@@ -98,7 +106,7 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp func(string, map[str
 	if len(changes.InsertRows) > 0 {
 		strSql := buildInsertSql(table)
 		if stmt, result_err = tx.Prepare(pp(strSql, nil)); result_err != nil {
-			result_err = NewSqlError(strSql, result_err)
+			result_err = NewSqlError("[prepare]\n"+strSql, result_err)
 			return
 		}
 		for _, r := range changes.InsertRows {

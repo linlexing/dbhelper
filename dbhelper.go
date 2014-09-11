@@ -362,6 +362,33 @@ func (h *DBHelper) DropTable(tablename string) error {
 func (h *DBHelper) TableExists(tablename string) (bool, error) {
 	return h.metaHelper.TableExists(tablename)
 }
+func getOrderColumns(columns []*TableColumn, order []string) []*TableColumn {
+	cleanOrder := order
+	//插入未标明的字段
+	for _, col := range columns {
+		bFound := false
+		for _, orderName := range cleanOrder {
+			if col.Name == orderName {
+				bFound = true
+				break
+			}
+		}
+		if !bFound {
+			cleanOrder = append(cleanOrder, col.Name)
+		}
+	}
+	//返回数据
+	rev := []*TableColumn{}
+	for _, orderName := range cleanOrder {
+		for _, col := range columns {
+			if orderName == col.Name {
+				rev = append(rev, col)
+				break
+			}
+		}
+	}
+	return rev
+}
 func (h *DBHelper) Table(tablename string) (*DataTable, error) {
 	result := NewDataTable(tablename)
 	var err error
@@ -370,16 +397,28 @@ func (h *DBHelper) Table(tablename string) (*DataTable, error) {
 	} else if !exists {
 		return nil, fmt.Errorf("the table %q not found", tablename)
 	}
-	//获取描述
-	if result.Desc, err = h.metaHelper.GetTableDesc(tablename); err != nil {
-		return nil, err
-	}
 	//获取字段
-
 	columns, err := h.metaHelper.GetColumns(tablename)
 	if err != nil {
 		return nil, err
 	}
+	//获取描述
+	if result.Desc, err = h.metaHelper.GetTableDesc(tablename); err != nil {
+		return nil, err
+	}
+	var colOrders []string
+	//从描述中分离出字段的顺序
+	if orderVal := result.Desc["ColumnsOrder"]; orderVal != nil {
+		if orderArr, ok := orderVal.([]interface{}); ok {
+			for _, v := range orderArr {
+				if strV, isok := v.(string); isok {
+					colOrders = append(colOrders, strV)
+				}
+			}
+		}
+		delete(result.Desc, "ColumnsOrder")
+	}
+	columns = getOrderColumns(columns, colOrders)
 	for _, col := range columns {
 		aColumn := NewDataColumn(col.Name, col.Type, col.MaxSize, col.NotNull)
 		aColumn.Desc = col.Desc
@@ -432,12 +471,14 @@ func (h *DBHelper) SaveChange(table *DataTable) (rcount int64, err error) {
 	rcount, err = internalUpdateTableTx(h.tx, table, h.ConvertSql)
 	return
 }
-func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
+func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable, oldColumnsOrder []string) error {
+	colOrders := &columnOrder{oldColumnsOrder}
 	if len(newStruct.TableName) == 0 {
 		return fmt.Errorf("the table name is empty")
 	}
 	tablename := newStruct.TableName
 	if oldStruct == nil {
+		newStruct.Desc["ColumnsOrder"] = oldColumnsOrder
 		return p.metaHelper.CreateTable(newStruct)
 	}
 
@@ -503,6 +544,7 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 		}
 		//找不到的需要删除
 		if !bFound {
+			colOrders.delete(oldColumn.Name)
 			if err := p.metaHelper.DropColumn(tablename, oldColumn.Name); err != nil {
 				return err
 			}
@@ -511,6 +553,9 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 
 	//修改字段类型或者重命名
 	for _, column := range foundColumns {
+		if column.OldColumn.Name != column.NewColumn.Name {
+			colOrders.rename(column.OldColumn.Name, column.NewColumn.Name)
+		}
 		if err := p.metaHelper.AlterColumn(tablename,
 			&TableColumn{column.OldColumn.Name, column.OldColumn.DataType, column.OldColumn.MaxSize, column.OldColumn.NotNull, column.OldColumn.Desc},
 			&TableColumn{column.NewColumn.Name, column.NewColumn.DataType, column.NewColumn.MaxSize, column.NewColumn.NotNull, column.NewColumn.Desc}); err != nil {
@@ -527,6 +572,11 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 			}
 		}
 		if !bFound {
+			if newColumn.Index() == 0 {
+				colOrders.insert("", newColumn.Name)
+			} else {
+				colOrders.insert(newStruct.Columns[newColumn.Index()-1].Name, newColumn.Name)
+			}
 			if err := p.metaHelper.AddColumn(tablename, &TableColumn{newColumn.Name, newColumn.DataType, newColumn.MaxSize, newColumn.NotNull, newColumn.Desc}); err != nil {
 				return err
 			}
@@ -562,10 +612,11 @@ func (p *DBHelper) UpdateStruct(oldStruct, newStruct *DataTable) error {
 		}
 	}
 	//处理表的描述
-	if !oldStruct.Desc.Equal(newStruct.Desc) {
-		if err := p.metaHelper.AlterTableDesc(newStruct.TableName, newStruct.Desc); err != nil {
-			return err
-		}
+	colOrders.reorder(newStruct.ColumnNames())
+	desc := newStruct.Desc.Clone()
+	desc["ColumnsOrder"] = colOrders.colNames
+	if err := p.metaHelper.AlterTableDesc(newStruct.TableName, desc); err != nil {
+		return err
 	}
 	return nil
 }
