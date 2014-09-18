@@ -117,7 +117,13 @@ func (r *RootMeta) BuildSelectLimitSql(srcSql string, pkFields []string, startKe
 		selectStr = "\t*"
 	}
 	if len(orderby) > 0 {
-		orderbyStr = "\norder by\n" + strings.Join(orderbyArr, ",\n")
+		orderbyStr = "\norder by\n"
+		for i, v := range orderbyArr {
+			orderbyStr += "\t" + v
+			if i < len(orderbyArr)-1 {
+				orderbyStr += ",\n"
+			}
+		}
 	}
 	if where != "" {
 		whereStr = "\nwhere\n\t(" + where + ")"

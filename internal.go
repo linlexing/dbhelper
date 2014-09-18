@@ -99,6 +99,9 @@ func internalUpdateTableTx(tx *sql.Tx, table *DataTable, pp func(string, map[str
 			if iCount, result_err = result.RowsAffected(); result_err != nil {
 				return
 			}
+			if iCount == 0 {
+				result_err = NewSqlError(strSql, fmt.Errorf("record can't update,maybe other user changed the record"), append(r.Data, r.OriginData...)...)
+			}
 			rcount += iCount
 		}
 	}
