@@ -132,16 +132,20 @@ func (r *RootMeta) BuildSelectLimitSql(srcSql string, pkFields []string, startKe
 		if whereStr == "" {
 			whereStr = "\nwhere\n" + lstvalWhere
 		} else {
-			whereStr = where + " and\n" + lstvalWhere
+			whereStr = whereStr + " and\n" + lstvalWhere
 		}
 	}
+	var limitStr = ""
+	if limit > 0 {
+		limitStr = fmt.Sprintf("limit %d", limit)
+	}
 	return fmt.Sprintf(
-		"select\n%s\nfrom\n\t(%s) sellmt %s%s\nlimit %d",
+		"select\n%s\nfrom\n\t(%s) sellmt %s%s\n%s",
 		selectStr,
 		srcSql,
 		whereStr,
 		orderbyStr,
-		limit), lstval
+		limitStr), lstval
 }
 
 type MetaHelper interface {
