@@ -145,6 +145,7 @@ func (h *DBHelper) QueryT(query string, templateParam map[string]interface{}, ar
 		return nil, fmt.Errorf("db not open")
 	}
 	strSql := h.ConvertSql(query, templateParam)
+
 	if h.tx != nil {
 		rows, err = h.tx.Query(strSql, args...)
 	} else {

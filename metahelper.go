@@ -46,19 +46,20 @@ func buildWhere(orderby []*orderField, lastValues []interface{}) (string, []inte
 	if len(orderby) == 0 {
 		panic(fmt.Errorf("orderby can't is empty"))
 	}
-	var opt string
+	var result string
 	if orderby[0].SortType == "DESC" {
-		opt = "<"
+		result = fmt.Sprintf("\t((%s is null and {{ph}} is not null) or %s < {{ph}})", orderby[0].Field, orderby[0].Field)
 	} else {
-		opt = ">"
+		result = fmt.Sprintf("\t((%s is not null and {{ph}} is null) or %s > {{ph}})", orderby[0].Field, orderby[0].Field)
 	}
-	result := fmt.Sprintf("\t%s %s {{ph}}", orderby[0].Field, opt)
+	lastValues = append(lastValues, orderby[0].Value)
 	lastValues = append(lastValues, orderby[0].Value)
 	if len(orderby) > 1 {
 		var str string
 		lastValues = append(lastValues, orderby[0].Value)
+		lastValues = append(lastValues, orderby[0].Value)
 		str, lastValues = buildWhere(orderby[1:], lastValues)
-		result = fmt.Sprintf("(%s or (%s = {{ph}} and %s))", result, orderby[0].Field, str)
+		result = fmt.Sprintf("(\n%s or ((%s is null and {{ph}} is null or %s = {{ph}}) and\n%s))", result, orderby[0].Field, orderby[0].Field, str)
 	}
 	return result, lastValues
 }
